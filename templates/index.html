@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Route AI - Intelligent Multimodal Journey Assistant</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS for OpenStreetMap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <span class="brand-icon">🧭</span>
+                <div>
+                    <h1>Smart Route AI</h1>
+                    <p class="tagline">Multimodal Route Comparison, Travel Cost & Weather-Aware Planner</p>
+                </div>
+            </div>
+            <div class="header-badges">
+                <span class="badge bca-badge">🎓 Final Year BCA Mini Project</span>
+                <button id="themeToggleBtn" class="btn-ghost" title="Toggle Dark/Light Mode">🌙 Theme</button>
+                <button id="printTripBtn" class="btn-outline-sm" onclick="window.print()">🖨️ Export Summary</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-layout">
+        
+        <!-- Left Sidebar: Controls & Inputs -->
+        <aside class="sidebar-panel">
+            
+            <!-- Quick Preset Journeys -->
+            <div class="card preset-card">
+                <div class="card-title">⚡ Quick Preset Journeys</div>
+                <div class="preset-buttons">
+                    <button class="preset-pill" onclick="loadPreset('bengaluru', 'mysuru')">Bengaluru ➔ Mysuru</button>
+                    <button class="preset-pill" onclick="loadPreset('bengaluru', 'mangaluru')">Bengaluru ➔ Mangaluru</button>
+                    <button class="preset-pill" onclick="loadPreset('hubballi', 'belagavi')">Hubballi ➔ Belagavi</button>
+                    <button class="preset-pill" onclick="loadPreset('bengaluru', 'goa')">Bengaluru ➔ Goa</button>
+                </div>
+            </div>
+
+            <!-- Route Input Form -->
+            <div class="card form-card">
+                <div class="card-title">📍 Plan Your Journey</div>
+                <form id="routeForm" onsubmit="event.preventDefault(); calculateSmartRoute();">
+                    
+                    <div class="input-group">
+                        <label for="startPlace">Starting Location</label>
+                        <div class="input-with-action">
+                            <input type="text" id="startPlace" value="Bengaluru" placeholder="City or location (e.g. Bengaluru)" required>
+                            <button type="button" class="btn-locate" onclick="detectCurrentLocation()" title="Use Current GPS">🎯</button>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="destPlace">Destination</label>
+                        <input type="text" id="destPlace" value="Mysuru" placeholder="City or location (e.g. Mysuru)" required>
+                    </div>
+
+                    <!-- 6 Route Personalities Selection -->
+                    <div class="input-group">
+                        <label for="routePersonality">Route Personality / Preference</label>
+                        <select id="routePersonality" class="form-select">
+                            <option value="fastest" selected>⚡ Fastest Route (Minimum Travel Time)</option>
+                            <option value="budget">💰 Budget-Friendly (Lowest Fuel Cost)</option>
+                            <option value="eco">🌿 Eco-Friendly (Lowest CO2 Emissions)</option>
+                            <option value="safe">🛡️ Safest Corridor (Lowest Risk Score)</option>
+                            <option value="scenic">🌅 Scenic Detour (Relaxed Pacing)</option>
+                            <option value="night">🌙 Night Owl (Well-lit Corridors & 24/7 Amenities)</option>
+                        </select>
+                    </div>
+
+                    <!-- Vehicle & Cost Parameters -->
+                    <div class="grid-2-col">
+                        <div class="input-group">
+                            <label for="vehicleType">Vehicle Type</label>
+                            <select id="vehicleType" class="form-select" onchange="autoAdjustMileage()">
+                                <option value="petrol_car" selected>🚗 Petrol Car</option>
+                                <option value="diesel_car">🚙 Diesel Car</option>
+                                <option value="ev">⚡ Electric Vehicle (EV)</option>
+                                <option value="bike">🏍️ Two-Wheeler / Bike</option>
+                                <option value="suv">🚐 SUV / MUV</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="mileageInput">Mileage (<span id="mileageUnit">km/L</span>)</label>
+                            <input type="number" id="mileageInput" value="16.0" step="0.5" min="2" max="100" required>
+                        </div>
+                    </div>
+
+                    <div class="grid-2-col">
+                        <div class="input-group">
+                            <label for="fuelPriceInput">Fuel Rate (₹/L)</label>
+                            <input type="number" id="fuelPriceInput" value="102.5" step="0.1" min="1" max="300" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="passengersInput">Passengers</label>
+                            <input type="number" id="passengersInput" value="2" min="1" max="10" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btnCalculate" class="btn-primary-block">
+                        <span>🔍 Find & Compare Smart Routes</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Favourite Journeys Quick Drawer -->
+            <div class="card fav-card">
+                <div class="card-header-flex">
+                    <div class="card-title">⭐ Favourite Journeys</div>
+                    <button class="btn-text-sm" onclick="saveCurrentToFavourites()">+ Save Current</button>
+                </div>
+                <div id="favouritesList" class="compact-list">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- Right / Center Main Content -->
+        <section class="content-panel">
+            
+            <!-- Map Container -->
+            <div class="card map-card">
+                <div class="map-header">
+                    <div>
+                        <span class="card-title">🗺️ Interactive Map (OpenStreetMap & Leaflet)</span>
+                        <span class="route-legend">
+                            <span class="legend-chip primary">Primary / Recommended</span>
+                            <span class="legend-chip alt">Alternative Route</span>
+                        </span>
+                    </div>
+                    <div class="map-actions">
+                        <button class="btn-ghost-sm" onclick="fitMapBounds()">⛶ Fit Map</button>
+                        <button class="btn-ghost-sm" onclick="toggleMapTiles()">🗺️ Satellite/Terrain</button>
+                    </div>
+                </div>
+                <div id="map" class="map-viewport"></div>
+            </div>
+
+            <!-- Route Alternatives Comparison Grid -->
+            <div class="section-wrapper" id="routesComparisonSection">
+                <div class="section-header">
+                    <h2>📊 Smart Route Alternatives Comparison</h2>
+                    <span id="recommendationBanner" class="rec-banner">Planning route...</span>
+                </div>
+
+                <div id="routesGrid" class="routes-cards-grid">
+                    <!-- Dynamic comparison cards rendered by JS -->
+                </div>
+            </div>
+
+            <!-- Weather & Road Risk Dashboard Grid -->
+            <div class="grid-2-col dashboard-widgets">
+                
+                <!-- Weather Aware Route Assistant Card -->
+                <div class="card widget-card">
+                    <div class="card-header-flex">
+                        <div class="card-title">🌤️ Weather-Aware Route Assistant</div>
+                        <span id="weatherLiveBadge" class="badge badge-success">Live Forecast</span>
+                    </div>
+                    <div class="weather-content" id="weatherContent">
+                        <div class="weather-temp-box">
+                            <div class="temp-big" id="destTemp">--°C</div>
+                            <div class="weather-status-text">
+                                <strong id="destCondition">Searching weather...</strong>
+                                <span id="destWind">Wind: -- km/h</span>
+                            </div>
+                        </div>
+                        <div class="weather-advice-box">
+                            <span class="advice-icon">💡</span>
+                            <p id="destAdvice">Plan your travel and enter starting point and destination to fetch live forecasts.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Smart Road Risk Score Card -->
+                <div class="card widget-card">
+                    <div class="card-header-flex">
+                        <div class="card-title">🛡️ Smart Road Risk Score</div>
+                        <span id="riskScoreBadge" class="badge badge-success">Low Risk</span>
+                    </div>
+                    <div class="risk-meter-container">
+                        <div class="risk-gauge">
+                            <div class="gauge-value" id="riskScoreVal">--</div>
+                            <span class="gauge-max">/100</span>
+                        </div>
+                        <div class="risk-info">
+                            <h4 id="riskLevelTitle">Route Safety Index</h4>
+                            <p id="riskSummaryText">Composite score evaluating distance fatigue, destination weather, night travel and road advisories.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Route Alerts and Travel Tips (With Sample Demonstration Labeling) -->
+            <div class="card alerts-card">
+                <div class="card-header-flex">
+                    <div class="card-title">⚠️ Route Alerts & Road Condition Reports</div>
+                    <span class="badge badge-info">Verified & Demonstration Feeds</span>
+                </div>
+                <p class="section-subtext">Warnings are highlighted when verified road data is available. Sample demonstration items are clearly labeled for academic demonstration.</p>
+                <div id="alertsContainer" class="alerts-grid">
+                    {% for alert in alerts %}
+                    <div class="alert-item severity-{{ alert.severity | lower }}">
+                        <div class="alert-top">
+                            <span class="alert-type">{{ alert.alert_type }}</span>
+                            {% if alert.is_verified == 1 %}
+                                <span class="badge badge-verified">✅ Verified Highway Alert</span>
+                            {% else %}
+                                <span class="badge badge-demo">🧪 Sample Demonstration</span>
+                            {% endif %}
+                        </div>
+                        <h4 class="alert-title">{{ alert.title }}</h4>
+                        <div class="alert-zone">📍 Zone: {{ alert.route_zone }}</div>
+                        <p class="alert-desc">{{ alert.description }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Journey Safety Check-In Tracker (Overdue Alarm) -->
+            <div class="card safety-checkin-card">
+                <div class="card-header-flex">
+                    <div class="card-title">⏰ Journey Safety Check-In Tracker</div>
+                    <span class="badge badge-accent">Live Overdue Monitor</span>
+                </div>
+                <p class="section-subtext">Set your expected arrival time and emergency contact. If overdue, an emergency status notification is automatically triggered.</p>
+                
+                <div class="checkin-layout">
+                    <!-- Check-in form -->
+                    <form id="checkinForm" class="checkin-form" onsubmit="event.preventDefault(); submitSafetyCheckin();">
+                        <div class="input-group">
+                            <label>Traveler Name</label>
+                            <input type="text" id="chkTraveler" value="Hamsa" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Emergency Contact</label>
+                            <input type="text" id="chkContact" value="Parent / Guardian" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Contact Phone</label>
+                            <input type="tel" id="chkPhone" value="+91 9876543210" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Expected Arrival Time</label>
+                            <input type="datetime-local" id="chkArrivalTime" required>
+                        </div>
+                        <button type="submit" class="btn-accent">🚀 Start Safety Watch</button>
+                    </form>
+
+                    <!-- Active check-ins list -->
+                    <div class="checkin-monitor">
+                        <h4>Active Journey Monitors</h4>
+                        <div id="activeCheckinList" class="checkin-list">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kannada + English Travel Assistant (Bilingual FAQ) -->
+            <div class="card assistant-card">
+                <div class="card-header-flex">
+                    <div class="card-title">💬 Kannada + English Travel Assistant (ದ್ವಿಭಾಷಾ ಸಹಾಯಕ)</div>
+                    <div class="lang-switcher">
+                        <button class="lang-btn active" id="langEnBtn" onclick="setAssistantLang('en')">English</button>
+                        <button class="lang-btn" id="langKnBtn" onclick="setAssistantLang('kn')">ಕನ್ನಡ (Kannada)</button>
+                    </div>
+                </div>
+                <div class="assistant-wrapper">
+                    <div class="quick-chips" id="assistantChips">
+                        <!-- Chips loaded by JS based on language -->
+                    </div>
+                    <div class="assistant-chat-box" id="assistantChatBox">
+                        <div class="chat-bubble bot-bubble" id="assistantWelcome">
+                            👋 Hello! Ask me about emergency contacts, fuel saving, Ghat road guidelines, or monsoon highway cautions.
+                        </div>
+                    </div>
+                    <form id="assistantForm" class="assistant-input-row" onsubmit="event.preventDefault(); sendAssistantQuery();">
+                        <input type="text" id="assistantQueryInput" placeholder="Type a travel safety or route question..." required>
+                        <button type="submit" class="btn-primary">Ask Assistant</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Search History Drawer -->
+            <div class="card history-card">
+                <div class="card-header-flex">
+                    <div class="card-title">📜 SQLite Search History</div>
+                    <button class="btn-danger-sm" onclick="clearSearchHistory()">Clear History</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Start</th>
+                                <th>Destination</th>
+                                <th>Distance</th>
+                                <th>Duration</th>
+                                <th>Personality</th>
+                                <th>Risk</th>
+                                <th>Est. Cost</th>
+                                <th>Timestamp</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <!-- Populated dynamically via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        <p>Smart Route AI • Final Year BCA Mini Project • Powered by Python Flask, SQLite, Leaflet & Open-Meteo</p>
+    </footer>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Custom Application JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
